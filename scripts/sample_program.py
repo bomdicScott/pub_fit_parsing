@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from datetime import datetime
-import csv,glob,sys,os
+import csv,glob,sys,os,json
 from fitparse import Activity
 from decimal import *
 from plot_picture import *
@@ -28,6 +28,7 @@ def write_zero(csv_dict):
 def print_record(rec, ):
     global record_number, time,distance,heartrate,velocity_smooth ,lat,long,altitude,watts,cadence,temp,grade_smooth
     csv_dict = {"time":0,"distance":0,"heartrate":0,"velocity_smooth":0,"lat":0,"long":0,"altitude":0,"watts":0,"cadence":0,"temp":0,"grade_smooth":0}
+    global header,header_dict,header_csv
 
     record_number += 1
     # time_stamp = 0
@@ -36,15 +37,21 @@ def print_record(rec, ):
     for field in rec.fields:
         to_print = "%s [%s]: %s" % (field.name, field.type.name, field.data)
 
-        #print field.name , field.data
-
         if field.data is not None and field.units:
             to_print += " [%s]" % field.units
         to_print += " [%d]" % total_sec
 
+        if(header == True):
+            if(field.name == "timestamp"):
+                header_csv += eval('['+str(header_dict)+']')
+                header_dict = {"time":str(field.data)}
+            else:
+                header_dict[field.name] = str(field.data)
+
         if field.name == 'timestamp':
             total_sec = field.data.hour*3600 + field.data.minute*60 + field.data.second
         if field.name == 'distance':
+            header = False
             for data in csv_dict:
                 if(csv_dict[data] < csv_dict["time"]):
                     list = eval(data)
@@ -90,7 +97,7 @@ def print_record(rec, ):
 
 if not filenames:
     count = 0
-    for fname in glob.glob('C:\\Users\\sean\\Documents\\python-fitparse-master\\tests\\data\\*.fit'):
+    for fname in glob.glob(com_path+'*.fit'):
         time,distance,heartrate,velocity_smooth ,lat,long,altitude,watts,cadence,temp,grade_smooth = [],[],[],[],[],[],[],[],[],[],[]
         header,header_dict,header_csv = True,{},[] #for create header.json
 
@@ -113,7 +120,7 @@ if not filenames:
 
             write_zero(csv_dict)
 
-            ID = fname[58:-4]
+            ID = fname[51:-4]
             if len(distance) != 0:
                 distance_max = max(distance) / 1000
             else:
@@ -133,6 +140,7 @@ if not filenames:
             else:
                 file_path = com_path+'Fit_'+str(ID)+'_'+str('%.2f' % distance_max)+'km_'+str('%.2f' % speed_everage)+'kmph'
 
+
             if not os.path.exists(file_path):
                 os.makedirs(file_path)
 
@@ -142,17 +150,20 @@ if not filenames:
                 for i in range(len(time)):
                     w.writerow(dict((name, eval(name)[i]) for name in csv_dict.keys()))
                 f.close()
+
+            with open(file_path+"/"+ID+".json","w") as header_json:
+                json.dump(header_csv,header_json,ensure_ascii=False)
+                header_json.close()
+
+            for data in csv_dict:
+                csv_dict[data] = eval(data)
+            data_plot(csv_dict,file_path)
+
             with open(com_path+'direct_table.csv','ab') as direct:
                 w = csv.writer(direct)
                 table = [ID,file_path]
                 w.writerow(table)
                 direct.close()
-
-            for data in csv_dict:
-                csv_dict[data] = eval(data)
-                #print len(csv_dict[data]),csv_dict[data]
-
-            data_plot(csv_dict,file_path)
 
             # a = datetime.strptime('30/03/09 16:31:32', '%d/%m/%y %H:%M:%S')
 
